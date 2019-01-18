@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>el-tree</title>
+    <!-- Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <!-- element -->
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <!-- 引入组件库 -->
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <!-- axios -->
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <p>权限管理
+            <el-button type="primary" plain style="float: right;" @click="isShowEditDialog = true">新增</el-button>
+        </p>
+        <el-table border :data="tableData" style="width: 100%">
+            <el-table-column prop="id" label="编号" width="180">
+            </el-table-column>
+            <el-table-column prop="text" label="权限名称" width="300">
+                <template slot-scope="scope">
+                    <div @click="treeClick(scope.row,scope.$index)" style="cursor: pointer;">
+                        <template v-if="scope.row.children && scope.row.children.length > 0">
+                            <i class="el-icon-arrow-down" :style="'margin-left:'+(scope.row.level-1)*2+'em;'" v-if="scope.row.open"></i>
+                            <i class="el-icon-arrow-right" :style="'margin-left:'+(scope.row.level-1)*2+'em;'" v-else></i>
+                            <span>{{ scope.row.text }}</span>
+                        </template>
+                        <span v-else :style="'margin-left:'+(scope.row.level-1)*2+'em;'">{{ scope.row.text }}</span>
+                    </div>
+                </template>
+            </el-table-column>
+            <el-table-column prop="url" label="访问路径">
+            </el-table-column>
+            <el-table-column prop="type" label="权限类型">
+            </el-table-column>
+            <el-table-column prop="state" label="状态">
+            </el-table-column>
+            <el-table-column label="操作" width="220">
+                <template slot-scope="scope">
+                    <el-button size="mini" type="primary" @click="handleEdit(scope.$index, scope.row)">编辑</el-button>
+                    <el-button size="mini" type="success" @click="handleEdit(scope.$index, scope.row)">编辑</el-button>
+                    <el-button size="mini" type="danger" @click="handleDelete(scope.$index, scope.row)">删除</el-button>
+                </template>
+            </el-table-column>
+        </el-table>
+
+        <el-dialog title="权限编辑框" :visible.sync="isShowEditDialog">
+            <el-form :model="formData">
+                <el-form-item label="上级权限" label-width="300">
+                    <el-select v-model="formData.sid" placeholder="">
+                        <el-option label="区域一" value="shanghai"></el-option>
+                        <el-option label="区域二" value="beijing"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="权限名称" label-width="300">
+                    <el-input v-model="formData.name" autocomplete="off"></el-input>
+                </el-form-item>
+                <el-form-item label="访问路径" label-width="300">
+                    <el-input v-model="formData.url" autocomplete="off"></el-input>
+                </el-form-item>
+                <el-form-item label="权限类型" label-width="300">
+                    <el-select v-model="formData.type" placeholder="">
+                        <el-option label="区域一" value="shanghai"></el-option>
+                        <el-option label="区域二" value="beijing"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="使用状态" label-width="300">
+                    <el-select v-model="formData.isSystem" placeholder="">
+                        <el-option label="区域一" value="shanghai"></el-option>
+                        <el-option label="区域二" value="beijing"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="备注" label-width="300">
+                    <el-input type='textarea' v-model="formData.description" autocomplete="off"></el-input>
+                </el-form-item>
+            </el-form>
+            <div slot="footer" class="dialog-footer">
+                <el-button @click="isShowEditDialog = false">取 消</el-button>
+                <el-button type="primary" @click="isShowEditDialog = false">确 定</el-button>
+            </div>
+        </el-dialog>
+
+    </div>
+
+</body>
+
+
+<script>
+    const util = {};
+    util.treeTableXcode = function (data, xcode) {
+        xcode = xcode || "";  // null替换为""
+        for (let i = 0; i < data.length; i++) {
+            let item = data[i];  // 第i个节点
+            item.xcode = xcode + i;  //1-2-1
+            if (item.children && item.children.length > 0) {  // 有子节点继续递归拼接
+                util.treeTableXcode(item.children, item.xcode + "-");
+            }
+        }
+    };
+    util.getTreeNodeLevel = (treeData, level) => {
+        treeData.forEach(node => {
+            node.level = level;  //赋值此层次的level
+            //递归处理子层
+            children = node.children;
+            if (children && children.length > 0) {
+                util.getTreeNodeLevel(children, level + 1);
+            }
+        });
+    }
+
+    let app = new Vue({
+        el: '#app',
+        data() {
+
+            return {
+                tableData: [],
+                isShowEditDialog: false,
+                formData: {
+                    sid: '',
+                    name: '',
+                    url: '',
+                    type: '',
+                    isSystem: '',
+                    description: '',
+                },
+                baseUrl: 'http://localhost:8080',
+            }
+        },
+        created() {
+            axios.get(this.baseUrl + '/SysPermission/ListTree')
+                .then((res) => {
+                    console.log(res.data);
+                    if (res.status == 200) {
+                        //遍历计算每个节点的level值,后台传过来树根结点level=1
+                        util.getTreeNodeLevel(res.data, 1);
+                        this.tableData = res.data;
+                        //标记每个树节点的层级信息，用于展开和收缩节点
+                        util.treeTableXcode(this.tableData);
+                    }
+
+                }).catch(function (error) {
+                    console.log(error);
+                })
+
+        },
+        methods: {
+            menuAdd: function () {
+
+            },
+            treeClick: function (item, index) {
+                //已展开就收缩
+                if (item.open) {
+                    this.collapse(item, index);
+                } else {
+                    this.expand(item, index);
+                }
+            },
+
+            //展开节点
+            expand: function (item, index) {
+                if (!item.children) {
+                    return index;
+                }
+
+                for (let i = 0; item.children && i < item.children.length; i++) {
+                    let child = item.children[i];
+                    //在++index位置进行操作，要删除的数量 0则不会删除，向数组添加child
+                    this.tableData.splice(++index, 0, child);
+                    //若有子节点 且 其子节点已被打开过 则递归展开到已打开的子节点处
+                    if (child.children && child.children.length > 0 && child.open) {
+                        index = this.expand(child, index);
+                    }
+                }
+                //展开状态
+                item.open = true;
+                return index;
+            },
+
+            //收缩节点
+            collapse: function (item, index) {
+                if (!item.children) {
+                    return index;
+                }
+                //收缩状态
+                item.open = false;
+                let len = 0;
+                for (let i = index + 1; i < this.tableData.length; i++) {
+                    let xcode = this.tableData[i].xcode;
+                    if (xcode.startsWith(item.xcode + "-")) {
+                        len++;
+                    } else {
+                        break;
+                    }
+                }
+                this.tableData.splice(index + 1, len);
+            },
+            handleEdit(index, row) {
+                this.isShowEditDialog = true;
+            }
+        }
+    })
+
+</script>
+
+</html>
